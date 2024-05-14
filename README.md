@@ -1,5 +1,5 @@
 # askdotmd
- chatgpt in your vscode
+ chatgpt in your vscode -- stop being distracted when you open up your browser and do LLM chat in your editor
 
 Saw this in a [@yacineMTB](https://twitter.com/yacineMTB) stream, he said he wouldn't release it, so I made it.
 
