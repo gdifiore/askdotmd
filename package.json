@@ -1,0 +1,49 @@
+{
+  "name": "askdotmd",
+  "displayName": "ask_dot_md",
+  "version": "1.0.0",
+  "description": "chatgpt in your vscode",
+  "keywords": [],
+  "author": "Gabe DiFiore",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:extension.sendRequest"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "extension.sendRequest",
+        "title": "Send Request to LLM API"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "extension.sendRequest",
+        "key": "ctrl+shift+l"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.11",
+    "@types/vscode": "^1.89.0",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.46.1",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  }
+}
