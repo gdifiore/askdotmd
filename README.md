@@ -1,7 +1,9 @@
 # askdotmd
  chatgpt in your vscode
 
-Saw this in a [@yacineMTD](twitter.com/yacineMTD) stream, he said he wouldn't release it, so I made it.
+Saw this in a [@yacineMTB](https://twitter.com/yacineMTB) stream, he said he wouldn't release it, so I made it.
+
+Probably no support for other closed-source LLMs like Claude, but local LLM support coming.
 
 Requires `OPENAI_API_KEY` environment variable to be set.
 
