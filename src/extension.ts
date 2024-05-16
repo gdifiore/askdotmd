@@ -5,13 +5,10 @@ import OpenAI from "openai";
 
 export function activate(context: vscode.ExtensionContext) {
   const sendRequestCommand = vscode.commands.registerCommand(
-    "extension.sendRequest",
+    "askdotmd.sendRequest",
     async () => {
-      const workspaceFolder =
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      const askFilePath = workspaceFolder
-        ? path.join(workspaceFolder, "ask.md")
-        : undefined;
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      const askFilePath = workspaceFolder ? path.join(workspaceFolder, "ask.md") : undefined;
 
       if (!askFilePath) {
         vscode.window.showErrorMessage(
@@ -21,12 +18,23 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       try {
+        if (!fs.existsSync(askFilePath)) {
+          vscode.window.showErrorMessage('The "ask.md" file does not exist.');
+          return;
+        }
+
         const askContent = fs.readFileSync(askFilePath, "utf-8");
+        const apiKey = process.env.OPENAI_API_KEY;
 
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        if (!apiKey) {
+          vscode.window.showErrorMessage('OPENAI_API_KEY is not set.');
+          return;
+        }
 
-        openai.chat.completions.create({
-          model: 'gpt-4o',
+        const openai = new OpenAI({ apiKey });
+
+        const response = await openai.chat.completions.create({
+          model: 'gpt-4',
           messages: [
             {
               role: 'system',
@@ -37,16 +45,12 @@ export function activate(context: vscode.ExtensionContext) {
               content: askContent,
             },
           ],
-        })
-        .then(response => {
-          fs.appendFileSync(askFilePath, `\n\n${response.choices[0].message.content}`, "utf-8");
-          vscode.window.showInformationMessage(
-            'Request sent successfully, and response appended to "ask.md".'
-          );
-        })
-        .catch(error => {
-          vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
         });
+
+        fs.appendFileSync(askFilePath, `\n\n${response.choices[0].message.content}`, "utf-8");
+        vscode.window.showInformationMessage(
+          'Request sent successfully, and response appended to "ask.md".'
+        );
       } catch (error) {
         vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
       }

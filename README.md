@@ -9,6 +9,6 @@ Requires `OPENAI_API_KEY` environment variable to be set.
 
 ### How to use
 - cd into project root
-- touch `ask.md`
+- `touch ask.md`
 - add prompt to file
 - `ctrl+shift+l`
