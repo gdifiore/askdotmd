@@ -38,7 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
           messages: [
             {
               role: 'system',
-              content: 'You are a programming assistant, tasked with assisting, guiding, and supporting developers.',
+              content: 'You are a helpful and knowledgeable programming assistant. Your primary role is to assist developers by providing accurate and relevant information, answering their questions, and helping them solve programming challenges. You understand multiple programming languages and can provide code examples, explain complex concepts in a simple manner, and offer guidance on best practices.',
             },
             {
               role: 'user',
