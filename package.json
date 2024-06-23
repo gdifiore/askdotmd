@@ -1,7 +1,7 @@
 {
   "name": "askdotmd",
   "displayName": "ask_dot_md",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "chatgpt in your vscode",
   "keywords": [],
   "author": "Gabe DiFiore",
@@ -29,13 +29,39 @@
         "command": "askdotmd.sendRequest",
         "key": "ctrl+shift+l"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Ask.md",
+      "properties": {
+        "askdotmd.defaultModel": {
+          "type": "string",
+          "enum": [
+            "claude",
+            "openai",
+            "lmstudio"
+          ],
+          "default": "claude",
+          "description": "Default model to use for requests"
+        },
+        "askdotmd.claudeApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for Claude"
+        },
+        "askdotmd.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for OpenAI"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run webpack",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "webpack": "webpack --mode production"
+    "webpack": "webpack --mode production",
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.12.11",
@@ -46,6 +72,6 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "openai": "^4.47.1"
+    "axios": "^0.24.0"
   }
 }
