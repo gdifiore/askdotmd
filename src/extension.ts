@@ -62,6 +62,9 @@ const modelConfigs: Record<string, ModelConfig> = {
   },
 };
 
+// Store the last content of the document
+let lastContent = "";
+
 export function activate(context: vscode.ExtensionContext) {
   const sendRequestCommand = vscode.commands.registerCommand(
     "askdotmd.sendRequest",
@@ -74,20 +77,19 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const document = editor.document;
-        const selection = editor.selection;
-        
-        // Get the selected text or the entire document
-        const content = selection.isEmpty 
-          ? document.getText() 
-          : document.getText(selection);
+        const currentContent = document.getText();
+
+        // Compute the difference
+        const newContent = currentContent.substring(lastContent.length);
 
         const modelName = await selectModel();
         if (!modelName) return;
 
-        const response = await sendRequest(modelName, content);
+        const response = await sendRequest(modelName, newContent);
         if (!response) return;
 
         // Replace the selection or insert at cursor
+        const selection = editor.selection;
         await editor.edit(editBuilder => {
           if (selection.isEmpty) {
             editBuilder.insert(selection.start, response);
@@ -103,6 +105,9 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           'Request sent successfully, and response added to the document.'
         );
+
+        // Update the last content
+        lastContent = currentContent;
       } catch (error) {
         vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
       }
