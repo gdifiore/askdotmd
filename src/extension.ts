@@ -123,6 +123,9 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Update the last content
         lastContent = currentContent;
+
+        // Update the last content
+        lastContent = currentContent;
       } catch (error) {
         vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
       }
@@ -179,3 +182,4 @@ async function sendRequest(modelName: string, content: string): Promise<string |
 }
 
 export function deactivate() {}
+
