@@ -5,6 +5,7 @@
   "description": "chatgpt in your vscode",
   "keywords": [],
   "author": "Gabe DiFiore",
+  "publisher": "gdifiore",
   "license": "GPL-3.0-only",
   "repository": {},
   "engines": {

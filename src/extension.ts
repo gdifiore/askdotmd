@@ -120,12 +120,6 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           'Request sent successfully, and response added to the document.'
         );
-
-        // Update the last content
-        lastContent = currentContent;
-
-        // Update the last content
-        lastContent = currentContent;
       } catch (error) {
         vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
       }
