@@ -11,4 +11,4 @@ Set your preffered LLM provider & the corresponding API key in VSCode settings.
 - or select a chunk of text and do the same
 
 ## Demo
-<div style="position:relative; width:100%; height:0px; padding-bottom:30.649%"><iframe allow="fullscreen" allowfullscreen height="100%" src="https://streamable.com/e/advgvj?" width="100%" style="border:none; width:100%; height:100%; position:absolute; left:0px; top:0px; overflow:hidden;"></iframe></div>
+[Streamable Link](https://streamable.com/advgvj)
