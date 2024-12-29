@@ -3,13 +3,18 @@
 
 Set your preffered LLM provider & the corresponding API key in VSCode settings.
 
-## How to use
-- cd into project root
-- `touch ask.md` 
-  - it will work with any file, but it was designed to be separate from your actual codebase
-- add prompt to file
-- `ctrl+shift+l` for whole file
-- or select a chunk of text and do the same
+## Installation
+1. Download `.vsix` from latest release
+2. `Ctrl+Shft+P`
+    1. Extensions: Install from VSIX 
+
+## How to Use
+1. `cd` into project root
+2. `touch ask.md` 
+    1. It will work with any file, but it was designed to be separate from your actual codebase
+3. Add prompt to file
+4. `ctrl+shift+l` for whole file
+    1. Or select a chunk of text and do the same
 
 ## Demo
 [Streamable Link](https://streamable.com/advgvj)
