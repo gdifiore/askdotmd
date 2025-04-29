@@ -1,9 +1,17 @@
 {
   "name": "askdotmd",
   "displayName": "ask_dot_md",
-  "version": "2.1.0",
-  "description": "chatgpt in your vscode",
-  "keywords": [],
+  "version": "2.2.0",
+  "description": "AI-powered coding assistant in your VSCode",
+  "keywords": [
+    "ai",
+    "assistant",
+    "Claude",
+    "OpenAI",
+    "code",
+    "GPT",
+    "LLM"
+  ],
   "author": "Gabe DiFiore",
   "publisher": "gdifiore",
   "license": "GPL-3.0-only",
@@ -12,37 +20,66 @@
     "vscode": "^1.89.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Machine Learning",
+    "Programming Languages"
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onCommand:askdotmd.sendRequest"
+    "onStartupFinished"
   ],
   "contributes": {
     "commands": [
       {
         "command": "askdotmd.sendRequest",
-        "title": "Send Request to LLM API"
+        "title": "Ask.md: Send Request to LLM"
+      },
+      {
+        "command": "askdotmd.configure",
+        "title": "Ask.md: Configure"
+      },
+      {
+        "command": "askdotmd.saveSystemPrompt",
+        "title": "Ask.md: Save System Prompt"
       }
     ],
     "keybindings": [
       {
         "command": "askdotmd.sendRequest",
-        "key": "ctrl+shift+l"
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "askdotmd.sendRequest",
+          "group": "z_commands",
+          "when": "editorTextFocus"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "askdotmd.saveSystemPrompt",
+          "when": "false"
+        }
+      ]
+    },
     "configuration": {
       "title": "Ask.md",
       "properties": {
         "askdotmd.defaultModel": {
           "type": "string",
-          "enum": [
-            "claude",
-            "openai",
-            "lmstudio"
-          ],
           "default": "claude",
           "description": "Default model to use for requests"
+        },
+        "askdotmd.recentModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Recently used models"
         },
         "askdotmd.claudeApiKey": {
           "type": "string",
@@ -53,6 +90,23 @@
           "type": "string",
           "default": "",
           "description": "API key for OpenAI"
+        },
+        "askdotmd.maxTokens": {
+          "type": "number",
+          "default": 1000,
+          "description": "Maximum tokens to request from the API"
+        },
+        "askdotmd.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Temperature for response generation (higher = more creative, lower = more deterministic)"
+        },
+        "askdotmd.showContextInfo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include file context information in requests"
         }
       }
     }
@@ -73,6 +127,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "axios": "^0.24.0"
+    "axios": "^0.24.0",
+    "debug": "^4.4.0"
   }
 }
