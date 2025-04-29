@@ -5,40 +5,41 @@ interface ModelConfig {
   apiUrl: string;
   headers: (apiKey: string) => Record<string, string>;
   payload: (systemPrompt: string, content: string) => any;
+  parseResponse: (response: any) => string;
 }
 
-const SYSTEM_PROMPT = `You are a helpful and knowledgeable programming assistant. Your primary role is to assist developers by providing accurate and relevant information, answering their questions, and helping them solve programming challenges. You understand multiple programming languages and can provide code examples, explain complex concepts in a simple manner, and offer guidance on best practices.`;
+const SYSTEM_PROMPT = `You are a helpful and knowledgeable programming assistant. Your primary role is to assist developers by providing accurate and relevant information, answering their questions, and helping them solve programming challenges. You understand multiple programming languages and can provide code examples, explain complex concepts in a simple manner, and offer guidance on best practices. If a request is embedded in a comment, extract and respond to the commented instruction.`;
 
 const modelConfigs: Record<string, ModelConfig> = {
   claude: {
-    apiUrl: "https://api.anthropic.com/v1/chat/completions",
+    apiUrl: "https://api.anthropic.com/v1/messages",
     headers: (apiKey: string) => ({
       "Content-Type": "application/json",
       "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
     }),
     payload: (systemPrompt: string, content: string) => ({
       model: "claude-3-sonnet-20240229",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content }
-      ],
+      messages: [{ role: "user", content: `${systemPrompt}\n\n${content}` }],
       max_tokens: 1000,
     }),
+    parseResponse: (response: any) => response.data.content[0].text,
   },
   openai: {
     apiUrl: "https://api.openai.com/v1/chat/completions",
     headers: (apiKey: string) => ({
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     }),
     payload: (systemPrompt: string, content: string) => ({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content }
+        { role: "user", content },
       ],
       max_tokens: 1000,
     }),
+    parseResponse: (response: any) => response.data.choices[0].message.content,
   },
   lmstudio: {
     apiUrl: "http://localhost:1234/v1/chat/completions",
@@ -46,15 +47,14 @@ const modelConfigs: Record<string, ModelConfig> = {
     payload: (systemPrompt: string, content: string) => ({
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content }
+        { role: "user", content },
       ],
       temperature: 0.7,
       max_tokens: 1000,
     }),
+    parseResponse: (response: any) => response.data.choices[0].message.content,
   },
 };
-
-let changeLog = "";
 
 export function activate(context: vscode.ExtensionContext) {
   const sendRequestCommand = vscode.commands.registerCommand(
@@ -67,74 +67,66 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
 
-        let contentToSend = "";
+        const document = editor.document;
         const selection = editor.selection;
+        let contentToSend = "";
 
         if (!selection.isEmpty) {
-          // If there's selected text, use that
-          contentToSend = editor.document.getText(selection);
-          console.log("Selected text to send:", contentToSend);
+          // Use selected text if available
+          contentToSend = document.getText(selection);
         } else {
-          // Otherwise, use the changeLog
-          contentToSend = changeLog.trim();
-          console.log("Change log to send:", contentToSend);
+          // Use entire file content if no selection
+          contentToSend = document.getText();
         }
 
-        // If there's no new content to send, show a message and return
-        if (!contentToSend) {
-          vscode.window.showInformationMessage("No new changes or selection to send.");
-          console.log("No new content detected");
+        if (!contentToSend.trim()) {
+          vscode.window.showInformationMessage(
+            "No content to send (empty file or selection)."
+          );
           return;
         }
 
         const modelName = await selectModel();
         if (!modelName) return;
 
-        const response = await sendRequest(modelName, contentToSend);
+        const apiKey = vscode.workspace
+          .getConfiguration("askdotmd")
+          .get<string>(`${modelName}ApiKey`);
+        if (!apiKey) {
+          vscode.window.showErrorMessage(
+            `API key for ${modelName} not configured. Please set it in settings.`
+          );
+          return;
+        }
+
+        const response = await sendRequest(modelName, contentToSend, apiKey);
         if (!response) return;
 
-        // Clear the changeLog after sending
-        changeLog = "";
-
-        // Insert the response
-        await editor.edit(editBuilder => {
+        // Insert or replace text
+        await editor.edit((editBuilder) => {
           if (selection.isEmpty) {
-            // Insert response at the cursor if no text is selected
             editBuilder.insert(selection.start, response);
           } else {
-            // Replace the selected text with the response
             editBuilder.replace(selection, response);
           }
         });
 
-        // Update the cursor position to the end of the inserted/replaced text
+        // Update cursor position
+        const responseLines = response.split("\n");
+        const lastLineLength = responseLines[responseLines.length - 1].length;
         const newPosition = selection.isEmpty
-          ? selection.start.translate(0, response.length)
-          : selection.start.translate(
-              0,
-              response.split("\n").pop()?.length || response.length
-            );
+          ? selection.start.translate(responseLines.length - 1, lastLineLength)
+          : selection.start.translate(responseLines.length - 1, lastLineLength);
         editor.selection = new vscode.Selection(newPosition, newPosition);
 
-
         vscode.window.showInformationMessage(
-          'Request sent successfully, and response added to the document.'
+          "Request sent successfully, and response added to the document."
         );
       } catch (error) {
         vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
       }
     }
   );
-
-  // Track changes in the active text editor's document
-  vscode.workspace.onDidChangeTextDocument(event => {
-    if (event.document === vscode.window.activeTextEditor?.document) {
-      for (const change of event.contentChanges) {
-        changeLog += change.text;
-      }
-      console.log("Current change log:", changeLog);
-    }
-  });
 
   context.subscriptions.push(sendRequestCommand);
 }
@@ -153,27 +145,29 @@ async function selectModel(): Promise<string | undefined> {
   });
 }
 
-async function sendRequest(modelName: string, content: string): Promise<string | undefined> {
+async function sendRequest(
+  modelName: string,
+  content: string,
+  apiKey: string
+): Promise<string | undefined> {
   const config = modelConfigs[modelName];
   if (!config) {
     vscode.window.showErrorMessage(`Invalid model: ${modelName}`);
     return undefined;
   }
 
-  const askdotmdConfig = vscode.workspace.getConfiguration("askdotmd");
-  const apiKey = askdotmdConfig.get<string>(`${modelName}ApiKey`) || "";
-
   try {
     const payload = config.payload(SYSTEM_PROMPT, content);
     const response = await axios.post(config.apiUrl, payload, {
       headers: config.headers(apiKey),
     });
-    return response.data.choices[0].message.content;
+    return config.parseResponse(response);
   } catch (error) {
-    vscode.window.showErrorMessage(`API request failed: ${(error as Error).message}`);
+    vscode.window.showErrorMessage(
+      `API request failed: ${(error as Error).message}`
+    );
     return undefined;
   }
 }
 
 export function deactivate() {}
-
