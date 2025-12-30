@@ -1,13 +1,13 @@
 # askdotmd
- chatgpt in your vscode -- stop being distracted when you open up your browser and do LLM chat in your editor
 
+LLM chat directly in VS Code. No browser needed.
 
 ## Features
 
-- **Full File Context**: Send the entire file to an LLM when no text is selected, assuming the request is in a comment (e.g., `// Explain this function`).
-- **Selected Text Context**: Send only the selected text to an LLM and replace the selection with the response.
-- **Multiple LLM Support**: Choose from Claude, OpenAI, or LM Studio (local) models.
-- **Customizable**: Configure API keys and default model via VS Code settings.
+- Send entire file or selected text to an LLM
+- Response inserted at cursor or replaces selection
+- Supports Claude, OpenAI, and LM Studio (local)
+- Configure API keys and models in VS Code settings
 
 ## Prerequisites
 
@@ -50,29 +50,22 @@ Example `settings.json`:
 
 ## Usage
 
-1. Open any code file in VS Code (e.g., `.js`, `.py`, `.md`).
-2. Add a commented request, e.g., // Generate a sorting function or # Explain this code.
-3. Trigger the askdotmd: Send Request command:
-    - No Selection: Run the command to send the entire file to the LLM. The response is inserted at the cursor.
-    - With Selection: Select text, then run the command to send only the selection. The response replaces the selected text.
+1. Open a file in VS Code
+2. Add a request in a comment (e.g., `// Generate a sorting function`)
+3. Trigger the command:
+   - **No selection**: Sends entire file, inserts response at cursor
+   - **With selection**: Sends only selection, replaces with response
 
-4. Access the command via:
+**Access the command:**
+- Command Palette (`Ctrl+Shift+P`): `askdotmd: Send Request`
+- Default keybinding: `Ctrl+Shift+L` (Mac: `Cmd+Shift+L`)
 
-    - Command Palette (Ctrl+Shift+P): Search for askdotmd: Send Request.
-    - Keybinding: Assign a key (e.g., Ctrl+Shift+L) in Keyboard Shortcuts (keybindings.json):
-    ```json
-      {
-        "key": "ctrl+shift+l",
-        "command": "askdotmd.sendRequest"
-      }
-      ```
-
-5. Choose an LLM if no default is set (Claude, OpenAI, or LM Studio).
+Select your LLM when prompted (Claude, OpenAI, or LM Studio).
 
 ## Demo
 [Streamable Link](https://streamable.com/advgvj)
 
 ## Limitations
-- The extension assumes requests are embedded in comments but does not yet extract them automatically. Ensure your request is clear in the file or selection.
-- Large files may exceed LLM token limits; consider selecting specific sections for such cases.
-- API rate limits or quotas may apply depending on your LLM provider.
+- Requests should be in comments; automatic extraction not yet implemented
+- Large files may exceed token limits (select specific sections instead)
+- Subject to your LLM provider's rate limits and quotas
