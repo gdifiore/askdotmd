@@ -5,7 +5,7 @@ interface ModelConfig {
   apiUrl: string;
   headers: (apiKey: string) => Record<string, string>;
   payload: (systemPrompt: string, content: string, config: any) => any;
-  parseResponse: (response: any) => string;
+  parseResponse: (response: any, modelName: string) => string;
 }
 
 const SYSTEM_PROMPT = `You are a helpful and knowledgeable programming assistant. Your primary role is to assist developers by providing accurate and relevant information, answering their questions, and helping them solve programming challenges. You understand multiple programming languages and can provide code examples, explain complex concepts in a simple manner, and offer guidance on best practices. If a request is embedded in a comment, extract and respond to the commented instruction.`;
@@ -23,9 +23,9 @@ const modelConfigs: Record<string, ModelConfig> = {
       messages: [{ role: "user", content: `${systemPrompt}\n\n${content}` }],
       max_tokens: config.maxTokens || 1000,
     }),
-    parseResponse: (response: any) => {
+    parseResponse: (response: any, modelName: string) => {
       if (!response.data?.content?.[0]?.text) {
-        throw new Error("Unexpected API response format from Claude");
+        throw new Error(`Unexpected API response format from ${modelName}`);
       }
       return response.data.content[0].text;
     },
@@ -45,9 +45,9 @@ const modelConfigs: Record<string, ModelConfig> = {
       max_tokens: config.maxTokens || 1000,
       temperature: config.temperature !== undefined ? config.temperature : 0.7,
     }),
-    parseResponse: (response: any) => {
+    parseResponse: (response: any, modelName: string) => {
       if (!response.data?.choices?.[0]?.message?.content) {
-        throw new Error("Unexpected API response format from OpenAI");
+        throw new Error(`Unexpected API response format from ${modelName}`);
       }
       return response.data.choices[0].message.content;
     },
@@ -75,9 +75,9 @@ const modelConfigs: Record<string, ModelConfig> = {
       }
       return payload;
     },
-    parseResponse: (response: any) => {
+    parseResponse: (response: any, modelName: string) => {
       if (!response.data?.choices?.[0]?.message?.content) {
-        throw new Error("Unexpected API response format from LM Studio");
+        throw new Error(`Unexpected API response format from ${modelName}`);
       }
       return response.data.choices[0].message.content;
     },
@@ -245,7 +245,7 @@ async function sendRequest(
       headers: config.headers(apiKey.trim()),
       timeout: 60000, // 60 seconds
     });
-    return config.parseResponse(response);
+    return config.parseResponse(response, modelName);
   } catch (error) {
     let errorMessage = "API request failed";
 
