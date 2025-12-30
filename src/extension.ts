@@ -4,7 +4,7 @@ import axios from "axios";
 interface ModelConfig {
   apiUrl: string;
   headers: (apiKey: string) => Record<string, string>;
-  payload: (systemPrompt: string, content: string) => any;
+  payload: (systemPrompt: string, content: string, config: any) => any;
   parseResponse: (response: any) => string;
 }
 
@@ -18,10 +18,10 @@ const modelConfigs: Record<string, ModelConfig> = {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     }),
-    payload: (systemPrompt: string, content: string) => ({
-      model: "claude-3-sonnet-20240229",
+    payload: (systemPrompt: string, content: string, config: any) => ({
+      model: config.claudeModel || "claude-3-5-sonnet-20241022",
       messages: [{ role: "user", content: `${systemPrompt}\n\n${content}` }],
-      max_tokens: 1000,
+      max_tokens: config.maxTokens || 1000,
     }),
     parseResponse: (response: any) => response.data.content[0].text,
   },
@@ -31,27 +31,40 @@ const modelConfigs: Record<string, ModelConfig> = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     }),
-    payload: (systemPrompt: string, content: string) => ({
-      model: "gpt-4o",
+    payload: (systemPrompt: string, content: string, config: any) => ({
+      model: config.openaiModel || "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content },
       ],
-      max_tokens: 1000,
+      max_tokens: config.maxTokens || 1000,
+      temperature: config.temperature !== undefined ? config.temperature : 0.7,
     }),
     parseResponse: (response: any) => response.data.choices[0].message.content,
   },
   lmstudio: {
     apiUrl: "http://localhost:1234/v1/chat/completions",
-    headers: () => ({ "Content-Type": "application/json" }),
-    payload: (systemPrompt: string, content: string) => ({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content },
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
-    }),
+    headers: (apiKey: string) => {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
+      return headers;
+    },
+    payload: (systemPrompt: string, content: string, config: any) => {
+      const payload: any = {
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content },
+        ],
+        temperature: config.temperature !== undefined ? config.temperature : 0.7,
+        max_tokens: config.maxTokens || 1000,
+      };
+      if (config.lmstudioModel) {
+        payload.model = config.lmstudioModel;
+      }
+      return payload;
+    },
     parseResponse: (response: any) => response.data.choices[0].message.content,
   },
 };
@@ -84,6 +97,23 @@ export function activate(context: vscode.ExtensionContext) {
             "No content to send (empty file or selection)."
           );
           return;
+        }
+
+        // Add file context if enabled
+        const config = vscode.workspace.getConfiguration("askdotmd");
+        const showContextInfo = config.get<boolean>("showContextInfo");
+        if (showContextInfo) {
+          const fileName = document.fileName;
+          const languageId = document.languageId;
+          let contextInfo = `File: ${fileName}\nLanguage: ${languageId}`;
+
+          if (!selection.isEmpty) {
+            const startLine = selection.start.line + 1;
+            const endLine = selection.end.line + 1;
+            contextInfo += `\nLines: ${startLine}-${endLine}`;
+          }
+
+          contentToSend = `${contextInfo}\n\n${contentToSend}`;
         }
 
         const modelName = await selectModel();
@@ -157,9 +187,21 @@ async function sendRequest(
   }
 
   try {
-    const payload = config.payload(SYSTEM_PROMPT, content);
+    // Get configuration settings
+    const vsConfig = vscode.workspace.getConfiguration("askdotmd");
+    const userConfig = {
+      maxTokens: vsConfig.get<number>("maxTokens") || 1000,
+      temperature: vsConfig.get<number>("temperature") !== undefined
+        ? vsConfig.get<number>("temperature")
+        : 0.7,
+      claudeModel: vsConfig.get<string>("claudeModel") || "claude-3-5-sonnet-20241022",
+      openaiModel: vsConfig.get<string>("openaiModel") || "gpt-4o",
+      lmstudioModel: vsConfig.get<string>("lmstudioModel") || "",
+    };
+
+    const payload = config.payload(SYSTEM_PROMPT, content, userConfig);
     const response = await axios.post(config.apiUrl, payload, {
-      headers: config.headers(apiKey),
+      headers: config.headers(apiKey.trim()),
     });
     return config.parseResponse(response);
   } catch (error) {
