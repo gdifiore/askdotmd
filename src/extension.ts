@@ -23,7 +23,12 @@ const modelConfigs: Record<string, ModelConfig> = {
       messages: [{ role: "user", content: `${systemPrompt}\n\n${content}` }],
       max_tokens: config.maxTokens || 1000,
     }),
-    parseResponse: (response: any) => response.data.content[0].text,
+    parseResponse: (response: any) => {
+      if (!response.data?.content?.[0]?.text) {
+        throw new Error("Unexpected API response format from Claude");
+      }
+      return response.data.content[0].text;
+    },
   },
   openai: {
     apiUrl: "https://api.openai.com/v1/chat/completions",
@@ -40,7 +45,12 @@ const modelConfigs: Record<string, ModelConfig> = {
       max_tokens: config.maxTokens || 1000,
       temperature: config.temperature !== undefined ? config.temperature : 0.7,
     }),
-    parseResponse: (response: any) => response.data.choices[0].message.content,
+    parseResponse: (response: any) => {
+      if (!response.data?.choices?.[0]?.message?.content) {
+        throw new Error("Unexpected API response format from OpenAI");
+      }
+      return response.data.choices[0].message.content;
+    },
   },
   lmstudio: {
     apiUrl: "http://localhost:1234/v1/chat/completions",
@@ -65,7 +75,12 @@ const modelConfigs: Record<string, ModelConfig> = {
       }
       return payload;
     },
-    parseResponse: (response: any) => response.data.choices[0].message.content,
+    parseResponse: (response: any) => {
+      if (!response.data?.choices?.[0]?.message?.content) {
+        throw new Error("Unexpected API response format from LM Studio");
+      }
+      return response.data.choices[0].message.content;
+    },
   },
 };
 
@@ -129,28 +144,54 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
 
-        const response = await sendRequest(modelName, contentToSend, apiKey);
-        if (!response) return;
+        // Use progress indicator for the request
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Sending request to LLM...",
+            cancellable: false,
+          },
+          async (progress) => {
+            const response = await sendRequest(modelName, contentToSend, apiKey);
+            if (!response) return;
 
-        // Insert or replace text
-        await editor.edit((editBuilder) => {
-          if (selection.isEmpty) {
-            editBuilder.insert(selection.start, response);
-          } else {
-            editBuilder.replace(selection, response);
+            // Validate response is not empty
+            if (!response.trim()) {
+              vscode.window.showErrorMessage("API returned empty response");
+              return;
+            }
+
+            // Verify editor is still active
+            const currentEditor = vscode.window.activeTextEditor;
+            if (!currentEditor || currentEditor !== editor) {
+              vscode.window.showWarningMessage(
+                "Editor changed during request. Response not inserted."
+              );
+              return;
+            }
+
+            // Insert or replace text
+            await editor.edit((editBuilder) => {
+              if (selection.isEmpty) {
+                editBuilder.insert(selection.start, response);
+              } else {
+                editBuilder.replace(selection, response);
+              }
+            });
+
+            // Update cursor position
+            const responseLines = response.split("\n");
+            const lastLineLength = responseLines[responseLines.length - 1].length;
+            const newPosition = selection.start.translate(
+              responseLines.length - 1,
+              lastLineLength
+            );
+            editor.selection = new vscode.Selection(newPosition, newPosition);
+
+            vscode.window.showInformationMessage(
+              "Request sent successfully, and response added to the document."
+            );
           }
-        });
-
-        // Update cursor position
-        const responseLines = response.split("\n");
-        const lastLineLength = responseLines[responseLines.length - 1].length;
-        const newPosition = selection.isEmpty
-          ? selection.start.translate(responseLines.length - 1, lastLineLength)
-          : selection.start.translate(responseLines.length - 1, lastLineLength);
-        editor.selection = new vscode.Selection(newPosition, newPosition);
-
-        vscode.window.showInformationMessage(
-          "Request sent successfully, and response added to the document."
         );
       } catch (error) {
         vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
@@ -202,12 +243,43 @@ async function sendRequest(
     const payload = config.payload(SYSTEM_PROMPT, content, userConfig);
     const response = await axios.post(config.apiUrl, payload, {
       headers: config.headers(apiKey.trim()),
+      timeout: 60000, // 60 seconds
     });
     return config.parseResponse(response);
   } catch (error) {
-    vscode.window.showErrorMessage(
-      `API request failed: ${(error as Error).message}`
-    );
+    let errorMessage = "API request failed";
+
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        // Server responded with error status
+        const status = error.response.status;
+        switch (status) {
+          case 401:
+            errorMessage = "Invalid API key. Please check your settings.";
+            break;
+          case 429:
+            errorMessage = "Rate limit exceeded. Please try again later.";
+            break;
+          case 500:
+          case 502:
+          case 503:
+            errorMessage = "Server error. The API service may be temporarily unavailable.";
+            break;
+          default:
+            errorMessage = `API error (${status}): ${error.response.data?.error?.message || error.message}`;
+        }
+      } else if (error.request) {
+        // Request made but no response received
+        errorMessage = "Cannot reach API. Please check your internet connection.";
+      } else {
+        errorMessage = `Request setup failed: ${error.message}`;
+      }
+    } else if (error instanceof Error) {
+      // Parse errors or other errors
+      errorMessage = error.message;
+    }
+
+    vscode.window.showErrorMessage(errorMessage);
     return undefined;
   }
 }
