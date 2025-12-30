@@ -8,7 +8,7 @@ interface ModelConfig {
   parseResponse: (response: any, modelName: string) => string;
 }
 
-const SYSTEM_PROMPT = `You are a helpful and knowledgeable programming assistant. Your primary role is to assist developers by providing accurate and relevant information, answering their questions, and helping them solve programming challenges. You understand multiple programming languages and can provide code examples, explain complex concepts in a simple manner, and offer guidance on best practices. If a request is embedded in a comment, extract and respond to the commented instruction.`;
+const SYSTEM_PROMPT = `Provide clear, accurate programming assistance. When code contains comments with requests or questions, extract and respond to those instructions.`;
 
 const modelConfigs: Record<string, ModelConfig> = {
   claude: {
