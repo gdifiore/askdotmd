@@ -24,4 +24,8 @@ module.exports = {
             }],
         }],
     },
+    ignoreWarnings: [
+        // follow-redirects optionally requires 'debug'; safe to skip
+        { module: /follow-redirects/ },
+    ],
 };

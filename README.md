@@ -24,29 +24,30 @@ LLM chat directly in VS Code. No browser needed.
 3. Click `...` > **Install from VSIX** and select the downloaded file.
 
 ### Build from Source
-1. Clone the repository: `git clone https://github.com/your-repo.git`.
-2. Install dependencies: `npm install`.
+1. Clone the repository: `git clone https://github.com/gdifiore/askdotmd.git`.
+2. Install dependencies: `npm ci`.
 3. Build the extension: `npm run webpack`.
 4. Package the extension: `npm run package`.
 5. Install the generated `.vsix` file as above.
 
 ## Configuration
 
-Set your preferred LLM provider and API keys in VS Code settings (`File > Preferences > Settings` or `Ctrl+,`):
+API keys are stored in VS Code's encrypted SecretStorage, not in `settings.json`.
+
+Set a key via the Command Palette (`Ctrl+Shift+P`):
+- `Ask.md: Set API Key` — choose a provider and enter the key
+- `Ask.md: Clear API Key` — remove a stored key
+
+On first request to a provider, you will be prompted for the key if none is stored.
+
+Other settings (Command Palette → `Preferences: Open Settings`):
 
 - `askdotmd.defaultModel`: Default LLM (`claude`, `openai`, or `lmstudio`).
-- `askdotmd.claudeApiKey`: Anthropic API key for Claude.
-- `askdotmd.openaiApiKey`: OpenAI API key for GPT models.
-- `askdotmd.lmstudioApiKey`: (Optional) API key for LM Studio.
-
-Example `settings.json`:
-```json
-{
-  "askdotmd.defaultModel": "openai",
-  "askdotmd.openaiApiKey": "your-openai-api-key",
-  "askdotmd.claudeApiKey": "your-anthropic-api-key"
-}
-```
+- `askdotmd.claudeModel` / `askdotmd.openaiModel` / `askdotmd.lmstudioModel`: Model name.
+- `askdotmd.lmstudioApiUrl`: LM Studio endpoint (default `http://localhost:1234/v1/chat/completions`).
+- `askdotmd.maxTokens`: Max tokens per response (default `4096`).
+- `askdotmd.temperature`: Sampling temperature (default `0.7`).
+- `askdotmd.showContextInfo`: Prepend filename/language/lines to request (default `true`).
 
 ## Usage
 

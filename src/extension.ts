@@ -1,287 +1,335 @@
+import * as path from "path";
 import * as vscode from "vscode";
-import axios from "axios";
+import axios, { AxiosRequestConfig } from "axios";
+
+type ModelName = "claude" | "openai" | "lmstudio";
+
+interface UserConfig {
+  maxTokens: number;
+  temperature: number;
+  claudeModel: string;
+  openaiModel: string;
+  lmstudioModel: string;
+  lmstudioApiUrl: string;
+}
 
 interface ModelConfig {
-  apiUrl: string;
+  apiUrl: (cfg: UserConfig) => string;
   headers: (apiKey: string) => Record<string, string>;
-  payload: (systemPrompt: string, content: string, config: any) => any;
-  parseResponse: (response: any, modelName: string) => string;
+  payload: (systemPrompt: string, content: string, cfg: UserConfig) => unknown;
+  parseResponse: (data: unknown, modelName: string) => string;
+  requiresApiKey: boolean;
 }
 
 const SYSTEM_PROMPT = `Provide clear, accurate programming assistance. When code contains comments with requests or questions, extract and respond to those instructions.`;
 
-const modelConfigs: Record<string, ModelConfig> = {
+const SECRET_KEY = (model: ModelName) => `askdotmd.${model}.apiKey`;
+
+const modelConfigs: Record<ModelName, ModelConfig> = {
   claude: {
-    apiUrl: "https://api.anthropic.com/v1/messages",
-    headers: (apiKey: string) => ({
+    apiUrl: () => "https://api.anthropic.com/v1/messages",
+    headers: (apiKey) => ({
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     }),
-    payload: (systemPrompt: string, content: string, config: any) => ({
-      model: config.claudeModel || "claude-3-5-sonnet-20241022",
-      messages: [{ role: "user", content: `${systemPrompt}\n\n${content}` }],
-      max_tokens: config.maxTokens || 1000,
+    payload: (systemPrompt, content, cfg) => ({
+      model: cfg.claudeModel,
+      system: systemPrompt,
+      messages: [{ role: "user", content }],
+      max_tokens: cfg.maxTokens,
+      temperature: cfg.temperature,
     }),
-    parseResponse: (response: any, modelName: string) => {
-      if (!response.data?.content?.[0]?.text) {
+    parseResponse: (data, modelName) => {
+      const text = (data as any)?.content?.[0]?.text;
+      if (typeof text !== "string") {
         throw new Error(`Unexpected API response format from ${modelName}`);
       }
-      return response.data.content[0].text;
+      return text;
     },
+    requiresApiKey: true,
   },
   openai: {
-    apiUrl: "https://api.openai.com/v1/chat/completions",
-    headers: (apiKey: string) => ({
+    apiUrl: () => "https://api.openai.com/v1/chat/completions",
+    headers: (apiKey) => ({
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     }),
-    payload: (systemPrompt: string, content: string, config: any) => ({
-      model: config.openaiModel || "gpt-4o",
+    payload: (systemPrompt, content, cfg) => ({
+      model: cfg.openaiModel,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content },
       ],
-      max_tokens: config.maxTokens || 1000,
-      temperature: config.temperature !== undefined ? config.temperature : 0.7,
+      max_tokens: cfg.maxTokens,
+      temperature: cfg.temperature,
     }),
-    parseResponse: (response: any, modelName: string) => {
-      if (!response.data?.choices?.[0]?.message?.content) {
+    parseResponse: (data, modelName) => {
+      const text = (data as any)?.choices?.[0]?.message?.content;
+      if (typeof text !== "string") {
         throw new Error(`Unexpected API response format from ${modelName}`);
       }
-      return response.data.choices[0].message.content;
+      return text;
     },
+    requiresApiKey: true,
   },
   lmstudio: {
-    apiUrl: "http://localhost:1234/v1/chat/completions",
-    headers: (apiKey: string) => {
+    apiUrl: (cfg) => cfg.lmstudioApiUrl,
+    headers: (apiKey) => {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (apiKey) {
-        headers["Authorization"] = `Bearer ${apiKey}`;
-      }
+      if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
       return headers;
     },
-    payload: (systemPrompt: string, content: string, config: any) => {
-      const payload: any = {
+    payload: (systemPrompt, content, cfg) => {
+      const body: Record<string, unknown> = {
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content },
         ],
-        temperature: config.temperature !== undefined ? config.temperature : 0.7,
-        max_tokens: config.maxTokens || 1000,
+        temperature: cfg.temperature,
+        max_tokens: cfg.maxTokens,
       };
-      if (config.lmstudioModel) {
-        payload.model = config.lmstudioModel;
-      }
-      return payload;
+      if (cfg.lmstudioModel) body.model = cfg.lmstudioModel;
+      return body;
     },
-    parseResponse: (response: any, modelName: string) => {
-      if (!response.data?.choices?.[0]?.message?.content) {
+    parseResponse: (data, modelName) => {
+      const text = (data as any)?.choices?.[0]?.message?.content;
+      if (typeof text !== "string") {
         throw new Error(`Unexpected API response format from ${modelName}`);
       }
-      return response.data.choices[0].message.content;
+      return text;
     },
+    requiresApiKey: false,
   },
 };
 
+const MODEL_NAMES = Object.keys(modelConfigs) as ModelName[];
+
+function isModelName(value: string): value is ModelName {
+  return (MODEL_NAMES as string[]).includes(value);
+}
+
+function readUserConfig(): UserConfig {
+  const c = vscode.workspace.getConfiguration("askdotmd");
+  return {
+    maxTokens: c.get<number>("maxTokens") ?? 4096,
+    temperature: c.get<number>("temperature") ?? 0.7,
+    claudeModel: c.get<string>("claudeModel") || "claude-3-5-sonnet-20241022",
+    openaiModel: c.get<string>("openaiModel") || "gpt-4o",
+    lmstudioModel: c.get<string>("lmstudioModel") || "",
+    lmstudioApiUrl:
+      c.get<string>("lmstudioApiUrl") || "http://localhost:1234/v1/chat/completions",
+  };
+}
+
 export function activate(context: vscode.ExtensionContext) {
-  const sendRequestCommand = vscode.commands.registerCommand(
-    "askdotmd.sendRequest",
-    async () => {
-      try {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
-          vscode.window.showErrorMessage("No active text editor found.");
-          return;
-        }
-
-        const document = editor.document;
-        const selection = editor.selection;
-        let contentToSend = "";
-
-        if (!selection.isEmpty) {
-          // Use selected text if available
-          contentToSend = document.getText(selection);
-        } else {
-          // Use entire file content if no selection
-          contentToSend = document.getText();
-        }
-
-        if (!contentToSend.trim()) {
-          vscode.window.showInformationMessage(
-            "No content to send (empty file or selection)."
-          );
-          return;
-        }
-
-        // Add file context if enabled
-        const config = vscode.workspace.getConfiguration("askdotmd");
-        const showContextInfo = config.get<boolean>("showContextInfo");
-        if (showContextInfo) {
-          const fileName = document.fileName;
-          const languageId = document.languageId;
-          let contextInfo = `File: ${fileName}\nLanguage: ${languageId}`;
-
-          if (!selection.isEmpty) {
-            const startLine = selection.start.line + 1;
-            const endLine = selection.end.line + 1;
-            contextInfo += `\nLines: ${startLine}-${endLine}`;
-          }
-
-          contentToSend = `${contextInfo}\n\n${contentToSend}`;
-        }
-
-        const modelName = await selectModel();
-        if (!modelName) return;
-
-        const apiKey = vscode.workspace
-          .getConfiguration("askdotmd")
-          .get<string>(`${modelName}ApiKey`);
-        if (!apiKey) {
-          vscode.window.showErrorMessage(
-            `API key for ${modelName} not configured. Please set it in settings.`
-          );
-          return;
-        }
-
-        // Use progress indicator for the request
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: "Sending request to LLM...",
-            cancellable: false,
-          },
-          async (progress) => {
-            const response = await sendRequest(modelName, contentToSend, apiKey);
-            if (!response) return;
-
-            // Validate response is not empty
-            if (!response.trim()) {
-              vscode.window.showErrorMessage("API returned empty response");
-              return;
-            }
-
-            // Verify editor is still active
-            const currentEditor = vscode.window.activeTextEditor;
-            if (!currentEditor || currentEditor !== editor) {
-              vscode.window.showWarningMessage(
-                "Editor changed during request. Response not inserted."
-              );
-              return;
-            }
-
-            // Insert or replace text
-            await editor.edit((editBuilder) => {
-              if (selection.isEmpty) {
-                editBuilder.insert(selection.start, response);
-              } else {
-                editBuilder.replace(selection, response);
-              }
-            });
-
-            // Update cursor position
-            const responseLines = response.split("\n");
-            const lastLineLength = responseLines[responseLines.length - 1].length;
-            const newPosition = selection.start.translate(
-              responseLines.length - 1,
-              lastLineLength
-            );
-            editor.selection = new vscode.Selection(newPosition, newPosition);
-
-            vscode.window.showInformationMessage(
-              "Request sent successfully, and response added to the document."
-            );
-          }
-        );
-      } catch (error) {
-        vscode.window.showErrorMessage(`Error: ${(error as Error).message}`);
-      }
-    }
+  context.subscriptions.push(
+    vscode.commands.registerCommand("askdotmd.sendRequest", () =>
+      sendRequestCommand(context)
+    ),
+    vscode.commands.registerCommand("askdotmd.setApiKey", () =>
+      setApiKeyCommand(context)
+    ),
+    vscode.commands.registerCommand("askdotmd.clearApiKey", () =>
+      clearApiKeyCommand(context)
+    )
   );
-
-  context.subscriptions.push(sendRequestCommand);
-}
-
-async function selectModel(): Promise<string | undefined> {
-  const config = vscode.workspace.getConfiguration("askdotmd");
-  const defaultModel = config.get<string>("defaultModel");
-  const modelNames = Object.keys(modelConfigs);
-
-  if (defaultModel && modelNames.includes(defaultModel)) {
-    return defaultModel;
-  }
-
-  return vscode.window.showQuickPick(modelNames, {
-    placeHolder: "Select a model",
-  });
-}
-
-async function sendRequest(
-  modelName: string,
-  content: string,
-  apiKey: string
-): Promise<string | undefined> {
-  const config = modelConfigs[modelName];
-  if (!config) {
-    vscode.window.showErrorMessage(`Invalid model: ${modelName}`);
-    return undefined;
-  }
-
-  try {
-    // Get configuration settings
-    const vsConfig = vscode.workspace.getConfiguration("askdotmd");
-    const userConfig = {
-      maxTokens: vsConfig.get<number>("maxTokens") || 1000,
-      temperature: vsConfig.get<number>("temperature") !== undefined
-        ? vsConfig.get<number>("temperature")
-        : 0.7,
-      claudeModel: vsConfig.get<string>("claudeModel") || "claude-3-5-sonnet-20241022",
-      openaiModel: vsConfig.get<string>("openaiModel") || "gpt-4o",
-      lmstudioModel: vsConfig.get<string>("lmstudioModel") || "",
-    };
-
-    const payload = config.payload(SYSTEM_PROMPT, content, userConfig);
-    const response = await axios.post(config.apiUrl, payload, {
-      headers: config.headers(apiKey.trim()),
-      timeout: 60000, // 60 seconds
-    });
-    return config.parseResponse(response, modelName);
-  } catch (error) {
-    let errorMessage = "API request failed";
-
-    if (axios.isAxiosError(error)) {
-      if (error.response) {
-        // Server responded with error status
-        const status = error.response.status;
-        switch (status) {
-          case 401:
-            errorMessage = "Invalid API key. Please check your settings.";
-            break;
-          case 429:
-            errorMessage = "Rate limit exceeded. Please try again later.";
-            break;
-          case 500:
-          case 502:
-          case 503:
-            errorMessage = "Server error. The API service may be temporarily unavailable.";
-            break;
-          default:
-            errorMessage = `API error (${status}): ${error.response.data?.error?.message || error.message}`;
-        }
-      } else if (error.request) {
-        // Request made but no response received
-        errorMessage = "Cannot reach API. Please check your internet connection.";
-      } else {
-        errorMessage = `Request setup failed: ${error.message}`;
-      }
-    } else if (error instanceof Error) {
-      // Parse errors or other errors
-      errorMessage = error.message;
-    }
-
-    vscode.window.showErrorMessage(errorMessage);
-    return undefined;
-  }
 }
 
 export function deactivate() {}
+
+async function sendRequestCommand(context: vscode.ExtensionContext) {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showErrorMessage("No active text editor found.");
+    return;
+  }
+
+  const document = editor.document;
+  const selection = editor.selection;
+  let contentToSend = selection.isEmpty
+    ? document.getText()
+    : document.getText(selection);
+
+  if (!contentToSend.trim()) {
+    vscode.window.showInformationMessage(
+      "No content to send (empty file or selection)."
+    );
+    return;
+  }
+
+  const vsConfig = vscode.workspace.getConfiguration("askdotmd");
+  if (vsConfig.get<boolean>("showContextInfo")) {
+    const fileName = path.basename(document.fileName);
+    let contextInfo = `File: ${fileName}\nLanguage: ${document.languageId}`;
+    if (!selection.isEmpty) {
+      contextInfo += `\nLines: ${selection.start.line + 1}-${selection.end.line + 1}`;
+    }
+    contentToSend = `${contextInfo}\n\n${contentToSend}`;
+  }
+
+  const modelName = await selectModel();
+  if (!modelName) return;
+
+  const modelCfg = modelConfigs[modelName];
+  let apiKey = await context.secrets.get(SECRET_KEY(modelName));
+  if (modelCfg.requiresApiKey && !apiKey) {
+    apiKey = await promptForApiKey(context, modelName);
+    if (!apiKey) return;
+  }
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Asking ${modelName}...`,
+      cancellable: true,
+    },
+    async (_progress, token) => {
+      const response = await sendRequest(modelName, contentToSend, apiKey ?? "", token);
+      if (!response || !response.trim()) {
+        if (response !== undefined) {
+          vscode.window.showErrorMessage("API returned empty response.");
+        }
+        return;
+      }
+
+      const currentEditor = vscode.window.activeTextEditor;
+      if (!currentEditor || currentEditor.document !== document) {
+        vscode.window.showWarningMessage(
+          "Editor changed during request. Response not inserted."
+        );
+        return;
+      }
+
+      const start = selection.start;
+      const ok = await currentEditor.edit((eb) => {
+        if (selection.isEmpty) {
+          eb.insert(start, response);
+        } else {
+          eb.replace(selection, response);
+        }
+      });
+      if (!ok) return;
+
+      const lines = response.split(/\r?\n/);
+      const lastLineLen = lines[lines.length - 1].length;
+      const endLine = start.line + lines.length - 1;
+      const endChar = lines.length === 1 ? start.character + lastLineLen : lastLineLen;
+      const newPos = new vscode.Position(endLine, endChar);
+      currentEditor.selection = new vscode.Selection(newPos, newPos);
+    }
+  );
+}
+
+async function selectModel(): Promise<ModelName | undefined> {
+  const config = vscode.workspace.getConfiguration("askdotmd");
+  const defaultModel = config.get<string>("defaultModel");
+  if (defaultModel && isModelName(defaultModel)) return defaultModel;
+
+  const picked = await vscode.window.showQuickPick(MODEL_NAMES, {
+    placeHolder: "Select a model",
+  });
+  return picked && isModelName(picked) ? picked : undefined;
+}
+
+async function promptForApiKey(
+  context: vscode.ExtensionContext,
+  modelName: ModelName
+): Promise<string | undefined> {
+  const value = await vscode.window.showInputBox({
+    prompt: `Enter API key for ${modelName}`,
+    password: true,
+    ignoreFocusOut: true,
+  });
+  if (!value) return undefined;
+  await context.secrets.store(SECRET_KEY(modelName), value);
+  return value;
+}
+
+async function setApiKeyCommand(context: vscode.ExtensionContext) {
+  const modelName = await vscode.window.showQuickPick(MODEL_NAMES, {
+    placeHolder: "Select model to set API key for",
+  });
+  if (!modelName || !isModelName(modelName)) return;
+  const value = await vscode.window.showInputBox({
+    prompt: `Enter API key for ${modelName} (stored in VS Code SecretStorage)`,
+    password: true,
+    ignoreFocusOut: true,
+  });
+  if (!value) return;
+  await context.secrets.store(SECRET_KEY(modelName), value);
+  vscode.window.showInformationMessage(`API key saved for ${modelName}.`);
+}
+
+async function clearApiKeyCommand(context: vscode.ExtensionContext) {
+  const modelName = await vscode.window.showQuickPick(MODEL_NAMES, {
+    placeHolder: "Select model to clear API key for",
+  });
+  if (!modelName || !isModelName(modelName)) return;
+  await context.secrets.delete(SECRET_KEY(modelName));
+  vscode.window.showInformationMessage(`API key cleared for ${modelName}.`);
+}
+
+async function sendRequest(
+  modelName: ModelName,
+  content: string,
+  apiKey: string,
+  token: vscode.CancellationToken
+): Promise<string | undefined> {
+  const userCfg = readUserConfig();
+  const modelCfg = modelConfigs[modelName];
+
+  const controller = new AbortController();
+  const cancelSub = token.onCancellationRequested(() => controller.abort());
+
+  const requestCfg: AxiosRequestConfig = {
+    headers: modelCfg.headers(apiKey.trim()),
+    timeout: 60000,
+    signal: controller.signal,
+  };
+
+  try {
+    const response = await axios.post(
+      modelCfg.apiUrl(userCfg),
+      modelCfg.payload(SYSTEM_PROMPT, content, userCfg),
+      requestCfg
+    );
+    return modelCfg.parseResponse(response.data, modelName);
+  } catch (error) {
+    if (token.isCancellationRequested) return undefined;
+    vscode.window.showErrorMessage(formatError(error));
+    return undefined;
+  } finally {
+    cancelSub.dispose();
+  }
+}
+
+function formatError(error: unknown): string {
+  if (axios.isCancel(error)) return "Request cancelled.";
+  if (axios.isAxiosError(error)) {
+    if (error.response) {
+      const status = error.response.status;
+      const apiMsg =
+        (error.response.data as any)?.error?.message ||
+        (error.response.data as any)?.message;
+      switch (status) {
+        case 401:
+          return "Invalid API key. Run 'Ask.md: Set API Key' to update.";
+        case 429:
+          return "Rate limit exceeded. Try again later.";
+        case 500:
+        case 502:
+        case 503:
+          return "Server error. The API service may be temporarily unavailable.";
+        default:
+          return `API error (${status})${apiMsg ? `: ${apiMsg}` : ""}`;
+      }
+    }
+    if (error.request) {
+      return "Cannot reach API. Check your internet connection.";
+    }
+    return `Request setup failed: ${error.message}`;
+  }
+  if (error instanceof Error) return error.message;
+  return "Unknown error";
+}

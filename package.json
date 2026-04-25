@@ -1,7 +1,7 @@
 {
   "name": "askdotmd",
   "displayName": "ask_dot_md",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "AI-powered coding assistant in your VSCode",
   "keywords": [
     "ai",
@@ -15,7 +15,10 @@
   "author": "Gabe DiFiore",
   "publisher": "gdifiore",
   "license": "GPL-3.0-only",
-  "repository": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gdifiore/askdotmd.git"
+  },
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -25,9 +28,7 @@
     "Programming Languages"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "activationEvents": [],
   "contributes": {
     "commands": [
       {
@@ -35,12 +36,12 @@
         "title": "Ask.md: Send Request to LLM"
       },
       {
-        "command": "askdotmd.configure",
-        "title": "Ask.md: Configure"
+        "command": "askdotmd.setApiKey",
+        "title": "Ask.md: Set API Key"
       },
       {
-        "command": "askdotmd.saveSystemPrompt",
-        "title": "Ask.md: Save System Prompt"
+        "command": "askdotmd.clearApiKey",
+        "title": "Ask.md: Clear API Key"
       }
     ],
     "keybindings": [
@@ -57,12 +58,6 @@
           "group": "z_commands",
           "when": "editorTextFocus"
         }
-      ],
-      "commandPalette": [
-        {
-          "command": "askdotmd.saveSystemPrompt",
-          "when": "false"
-        }
       ]
     },
     "configuration": {
@@ -72,29 +67,6 @@
           "type": "string",
           "default": "claude",
           "description": "Default model to use for requests"
-        },
-        "askdotmd.recentModels": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Recently used models"
-        },
-        "askdotmd.claudeApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "API key for Claude"
-        },
-        "askdotmd.openaiApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "API key for OpenAI"
-        },
-        "askdotmd.lmstudioApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "API key for LM Studio (optional for local instances)"
         },
         "askdotmd.claudeModel": {
           "type": "string",
@@ -113,8 +85,13 @@
         },
         "askdotmd.maxTokens": {
           "type": "number",
-          "default": 1000,
+          "default": 4096,
           "description": "Maximum tokens to request from the API"
+        },
+        "askdotmd.lmstudioApiUrl": {
+          "type": "string",
+          "default": "http://localhost:1234/v1/chat/completions",
+          "description": "LM Studio chat completions endpoint"
         },
         "askdotmd.temperature": {
           "type": "number",
@@ -147,7 +124,6 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "axios": "^0.24.0",
-    "debug": "^4.4.0"
+    "axios": "^1.7.7"
   }
 }
